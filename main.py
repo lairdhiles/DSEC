@@ -1,9 +1,3 @@
-
-Output:
-[Expected output from the ls -l command]
-
-
-
 import openai
 import os
 import sys
