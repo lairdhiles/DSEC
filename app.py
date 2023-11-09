@@ -6,7 +6,7 @@ from datetime import date
 import numbers
 from st_aggrid import GridOptionsBuilder, AgGrid
 
-from booking_risk import load_risk, pnl
+from booking_risk import book_swap, load_risk, pnl
 from fin_lib import plot_curve
 from mkt_data import load_curve_from_data, load_live_data, load_sod_data, mkt_moves
 
@@ -29,7 +29,7 @@ pnl_explain = pnl(live_data,sod_data,risk)
 
 calc_date = date.today()
 curve = load_curve_from_data(calc_date, sod_data, index)
-
+curve_risk, quotes = load_curve_from_data(calc_date, sod_data, index, risk=True)
 
 with col1:
     # Creating a sample dataframe for the table
@@ -76,30 +76,39 @@ with col2:
     with tab1:
         with st.form(key='my_form_swap'):
             notional = st.number_input(label='Enter Notional', value=1000000)
-            effective_date = st.date_input(label='Effective Date')
+            start_date = st.date_input(label='Effective Date')
             maturity_date = st.date_input(label='Maturity Date')
-            coupon = st.number_input(label='Coupon', value=5.0)
+            coupon = st.number_input(label='Fixed rate', value=5.0)
+            pay_rcv = st.selectbox('Fixed pay/rcv',
+                        ('Pay', 'Receive'))
             submit_button = st.form_submit_button(label='Book')
     
     with tab2:
         with st.form(key='my_form_bond'):
             notional = st.number_input(label='Enter Notional', value=1000000)
-            effective_date = st.date_input(label='Effective Date')
+            start_date = st.date_input(label='Effective Date')
             maturity_date = st.date_input(label='Maturity Date')
-            coupon = st.number_input(label='Coupon', value=5.0)
+            coupon = st.number_input(label='Fixed rate', value=5.0)/100
+            pay_rcv = st.selectbox('Fixed pay/rcv',
+                        ('Pay', 'Receive'))
             submit_button = st.form_submit_button(label='Book')
     
     with tab3:
         with st.form(key='my_form_fra'):
             notional = st.number_input(label='Enter Notional', value=1000000)
-            effective_date = st.date_input(label='Effective Date')
+            start_date = st.date_input(label='Effective Date')
             maturity_date = st.date_input(label='Maturity Date')
-            coupon = st.number_input(label='Coupon', value=5.0)
+            coupon = st.number_input(label='Fixed rate', value=5.0)
+            pay_rcv = st.selectbox('Fixed pay/rcv',
+                        ('Pay', 'Receive'))
             submit_button = st.form_submit_button(label='Book')
 
     # You can add callbacks or database interactions on button click
     if submit_button:
+        print("hello")
+        book_swap(index, notional, direction=pay_rcv, start_date=start_date, maturity_date=maturity_date,fixed_rate=coupon,curve=curve_risk,quotes=quotes)
         st.success('Transaction booked.')
+        
 
 
 from langchain.chains import LLMChain
