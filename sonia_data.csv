@@ -1,0 +1,17 @@
+instrument,rate,type
+1D,0.051865,deposit
+Z3,94.725,future
+H4,94.765,future
+M4,94.945,future
+U4,95.19,future
+Z4,95.445,future
+H5,95.66,future
+M5,95.815,future
+U5,95.915,future
+Z5,95.98,future
+H6,96.02,future
+M6,96.05,future
+U6,96.07,future
+5Y,0.04300425,swap
+10Y,0.04153445,swap
+30Y,0.04111164,swap

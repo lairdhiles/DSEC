@@ -2,102 +2,154 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+from datetime import date
+import numbers
+from st_aggrid import GridOptionsBuilder, AgGrid
 
-# Title for your app
-st.title('IR Derivatives Analytics Dashboard')
+from booking_risk import load_risk, pnl
+from fin_lib import plot_curve
+from mkt_data import load_curve_from_data, load_live_data, load_sod_data, mkt_moves
+
+# Set page configuration to wide mode
+st.set_page_config(page_title="Trading Copilot",layout="wide",initial_sidebar_state="expanded")
+
+# # Title for your app
+st.title('Trading Copilot')
+
+# Creating a layout with 2 columns: the main content and the chat column
+# main_col, chat_col = st.columns([3, 1])  # Adjust the ratio as needed
+col1, col2 = st.columns([2, 1])# Use the main column for the fixed content: table and graph
+index = "Sonia"
+risk = load_risk(index)
+live_data = load_live_data(index)
+sod_data = load_sod_data(index)
+market_moves = mkt_moves(live_data,sod_data)
+pnl_explain = pnl(live_data,sod_data,risk)
 
 
-import streamlit as st
-import openai
-import os
+calc_date = date.today()
+curve = load_curve_from_data(calc_date, sod_data, index)
 
-st.title("ChatGPT-like clone")
 
-# Set OpenAI API key from Streamlit secrets
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+with col1:
+    # Creating a sample dataframe for the table
+    
+    # Create a sample forward rates plot
+    forward_rates = pd.DataFrame({
+        'Date': pd.date_range(start='2024', periods=5, freq='Y'),
+        'Forward Rates': np.random.rand(5)
+    })
 
-# Set a default model
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-3.5-turbo"
+    fig = plot_curve(curve,"30Y")
+    st.plotly_chart(fig)
+    
+with st.sidebar:
+    
+    data = pd.DataFrame({
+    'risk': risk.values.flatten(),
+    'moves': market_moves.values,
+    'P&L': pnl_explain
+    }, index=risk.index)
+    
+    data.loc['Total'] = data.sum(axis=0)
+    
+    # data.set_index('bucket', inplace=True)
+    # data = data.style.hide(axis=0)
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    # Display the table
+    # st.table(data)
+    
+    def style_negative_positive(val):
+        if isinstance(val, numbers.Number):
+            color = 'red' if val < 0 else 'green' if val > 0 else ''
+            return f'color: {color};'
+        else:
+            return f'color: white;'
+    
+    styled_data = data.style.applymap(style_negative_positive)#, subset=['risk', 'moves', 'P&L', 'Total'])
+    st.table(styled_data.format(precision=4))
+    
 
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+with col2:
+    tab1, tab2, tab3 = st.tabs(["Swap", "Bond", "Fra/Future"])
+    # Input forms
+    with tab1:
+        with st.form(key='my_form_swap'):
+            notional = st.number_input(label='Enter Notional', value=1000000)
+            effective_date = st.date_input(label='Effective Date')
+            maturity_date = st.date_input(label='Maturity Date')
+            coupon = st.number_input(label='Coupon', value=5.0)
+            submit_button = st.form_submit_button(label='Book')
+    
+    with tab2:
+        with st.form(key='my_form_bond'):
+            notional = st.number_input(label='Enter Notional', value=1000000)
+            effective_date = st.date_input(label='Effective Date')
+            maturity_date = st.date_input(label='Maturity Date')
+            coupon = st.number_input(label='Coupon', value=5.0)
+            submit_button = st.form_submit_button(label='Book')
+    
+    with tab3:
+        with st.form(key='my_form_fra'):
+            notional = st.number_input(label='Enter Notional', value=1000000)
+            effective_date = st.date_input(label='Effective Date')
+            maturity_date = st.date_input(label='Maturity Date')
+            coupon = st.number_input(label='Coupon', value=5.0)
+            submit_button = st.form_submit_button(label='Book')
 
-# Accept user input
-if prompt := st.chat_input("What is up?"):
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    # Display assistant response in chat message container
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
+    # You can add callbacks or database interactions on button click
+    if submit_button:
+        st.success('Transaction booked.')
 
-client = openai.OpenAI()
 
-completion = client.chat.completions.create(
-  model="gpt-3.5-turbo",
-  messages=[
-    {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
-    {"role": "user", "content": "Compose a poem that explains the concept of recursion in programming."}
-  ]
-)
-# for response in client.chat.completions.create(
-#         model=st.session_state["openai_model"],
-#         messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
-#         stream=True,
-#     ):
-#         full_response += response['choices'][0]['delta'].get("content", "")
-#         message_placeholder.markdown(full_response + "▌")
+from langchain.chains import LLMChain
+from langchain.llms import OpenAI
+from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories import StreamlitChatMessageHistory
+from langchain.prompts import PromptTemplate
 
-full_response = client.chat.completions.create(
-        model=st.session_state["openai_model"],
-        messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]).choices[0].message.content.strip()
+# Use the chat column for the scrollable chat
 
-st.session_state.messages.append({"role": "assistant", "content": full_response})
+# st.header("Copilot")
+# Set up memory
+msgs = StreamlitChatMessageHistory(key="langchain_messages")
+memory = ConversationBufferMemory(chat_memory=msgs)
+if len(msgs.messages) == 0:
+    msgs.add_ai_message("How can I help you?")
 
-# Display chat messages
-for username, message in reversed(st.session_state.messages):
-    with st.chat_message(username):
-        st.write(message)
+view_messages = st.expander("View the message contents in session state")
 
-print("hello")
-# # Creating a sample dataframe for the table
-# data = pd.DataFrame({
-#     'bucket': ['1D', '1IMM', '2IMM', '3IMM'],
-#     'risk': np.random.randn(4),
-#     'moves': np.random.randn(4),
-#     'P&L': np.random.randint(1000, size=4)
-# })
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 
-# # Display the table
-# st.table(data)
 
-# # Create a sample forward rates plot
-# forward_rates = pd.DataFrame({
-#     'Date': pd.date_range(start='2024', periods=5, freq='Y'),
-#     'Forward Rates': np.random.rand(5)
-# })
+template = """You are an AI chatbot having a conversation with a human.
 
-# fig = px.line(forward_rates, x='Date', y='Forward Rates', title='Daily Forward Rates from the Yield Curve')
-# st.plotly_chart(fig)
+{history}
+Human: {human_input}
+AI: """
+prompt = PromptTemplate(input_variables=["history", "human_input"], template=template)
+llm_chain = LLMChain(llm=OpenAI(openai_api_key=openai_api_key), prompt=prompt, memory=memory)
 
-# # Input forms
-# with st.form(key='my_form'):
-#     notional = st.number_input(label='Enter Notional', value=1000000)
-#     effective_date = st.date_input(label='Effective Date')
-#     maturity_date = st.date_input(label='Maturity Date')
-#     coupon = st.number_input(label='Coupon', value=5.0)
-#     submit_button = st.form_submit_button(label='Book')
+# Render current messages from StreamlitChatMessageHistory
+for msg in msgs.messages:
+    st.chat_message(msg.type).write(msg.content)
 
-# # You can add callbacks or database interactions on button click
-# if submit_button:
-#     st.write('Transaction booked.')
+# If user inputs a new prompt, generate and draw a new response
+if prompt := st.chat_input():
+    st.chat_message("human").write(prompt)
+    # Note: new messages are saved to history automatically by Langchain during run
+    response = llm_chain.run(prompt)
+    st.chat_message("ai").write(response)
+
+# Draw the messages at the end, so newly generated ones show up immediately
+with view_messages:
+    """
+    Memory initialized with:
+    ```python
+    msgs = StreamlitChatMessageHistory(key="langchain_messages")
+    memory = ConversationBufferMemory(chat_memory=msgs)
+    ```
+
+    Contents of `st.session_state.langchain_messages`:
+    """
+    view_messages.json(st.session_state.langchain_messages)
